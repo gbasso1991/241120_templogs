@@ -15,6 +15,7 @@ from uncertainties import ufloat, unumpy
 from datetime import datetime,timedelta
 import matplotlib as mpl
 from scipy.interpolate import CubicSpline,PchipInterpolator
+
 #%%
 def lector_templog(directorio,rango_T_fijo=True):
     '''
@@ -62,12 +63,12 @@ def procesar_temperatura(directorio,rango_T_fijo=True):
     indx_1er_dato = np.nonzero(timestamp == dates[0].replace(microsecond=0))[0][0]
     indx_ultimo_dato = np.nonzero(timestamp == datetime.strptime(Fechas[-1], '%y%m%d_%H:%M:%S.%f').replace(microsecond=0))[0][0]
     
-    # Interpolación entre el primer y último ciclo (a partir del 30 de Oct 24 uso PchipInterpolator)
+    # Interpolación entre el primer y último ciclo (a partir del 30 de Oct 23 uso PchipInterpolator)
     # interp_func = interp1d(t_full, T_full, kind='linear')
     # t_interp = np.round(np.arange(t_full[indx_1er_dato], t_full[indx_ultimo_dato] + 1.01, 0.01), 2)
     # T_interp = np.round(interp_func(t_interp), 2)
 
-    # interp_func_2 = CubicSpline(t_full, T_full)
+    # interp_func_1 = CubicSpline(t_full, T_full)
     # t_interp_2 = np.round(np.arange(t_full[indx_1er_dato], t_full[indx_ultimo_dato] + 1.01, 0.01), 2)
     # T_interp_2 = np.round(interp_func_2(t_interp_2), 2)
 
@@ -209,9 +210,6 @@ plt.show()
 #%% Derivadas vs Temperatura
 #%% trabajamos con SV3 y FF4 
 
-
-
-
 fig,(ax)=plt.subplots(nrows=1,figsize=(10,4),constrained_layout=True,sharex=True)
 # ax.plot(T_SV_1,dT_SV_1,'o-',label='dT/dt SV_1')
 # ax.plot(T_SV_2,dT_SV_2,'o-',label='dT/dt SV_2')
@@ -219,10 +217,10 @@ ax.plot(T_SV_3,dT_SV_3,'o-',label='dT/dt SV_3')
 # ax.plot(T_interp_SV_1,dT_interp_SV_1,'.-',label='dT/dt interp SV_1')
 # ax.plot(T_interp_SV_2,dT_interp_SV_2,'.-',label='dT/dt interp SV_2')
 # ax.plot(T_interp_SV_3,dT_interp_SV_3,'.-',label='dT/dt interp SV_3',zorder=0)
-# ax2.plot(T_FF_1,dT_FF_1,'o-',label='dT/dt FF_1')
-# ax2.plot(T_FF_2,dT_FF_2,'o-',label='dT/dt FF_2')
-# ax2.plot(T_FF_3,dT_FF_3,'o-',label='dT/dt FF_3')
-ax.plot(T_FF_4,dT_FF_4,'o-',label='dT/dt FF_4')
+ax.plot(T_FF_1,dT_FF_1,'.-',label='dT/dt FF_1')
+ax.plot(T_FF_2,dT_FF_2,'.-',label='dT/dt FF_2')
+ax.plot(T_FF_3,dT_FF_3,'.-',label='dT/dt FF_3')
+#ax.plot(T_FF_4,dT_FF_4,'o-',label='dT/dt FF_4')
 # ax2.plot(T_interp_FF_4,dT_interp_FF_4,'o-',label='dT/dt interp_FF_4',zorder=0)
 for ai in [ax]:
     ai.set_xlabel('T (°C)')
@@ -232,8 +230,8 @@ for ai in [ax]:
 plt.suptitle('Derivadas temporales vs Temperatura')
 plt.show()
 
+#%% Interpolaciones y restas - trabajamos con SV3 y FF4 
 
-#%% Interpolaciones y restas 
 from scipy.interpolate import interp1d
 f = interp1d(T_SV_3,dT_SV_3, fill_value='extrapolate')
 
@@ -250,20 +248,23 @@ xnew2=T_FF_4[:-37]
 ynew2=f2(xnew2)
 
 resta_4 = dT_FF_4[:-37]-ynew2
+T_FF_4_solido= T_FF_4[np.nonzero(T_FF_4<-5)]
+# Calculo de SAR 
+Concentracion = 14.92/1000 # m/m
+CFF= 2.07 # J/Kg para la C1
+CSV= 2.10 # J/Kg 
 
+SAR_4 = (dT_FF_4[np.nonzero(T_FF_4<-5)]*CFF - ynew2[np.nonzero(T_FF_4<-5)]*CSV)/Concentracion
 indx_max_resta_4= np.argwhere(resta_4==max(resta_4))[0][0]
 
 from scipy.integrate import cumulative_trapezoid
-
-
 
 # Recuperar T original
 T_4_rec = cumulative_trapezoid(y=resta_4,x=t_FF_4[:-37],initial=0) + T_FF_4[0] 
 
 
-
 fig,(ax,ax2)=plt.subplots(nrows=2,figsize=(10,6),constrained_layout=True)
-ax.plot(T_SV_3,dT_SV_3,'o-',label='dT/dt SV_3')
+ax.plot(T_SV_3,dT_SV_3,'.-',label='dT/dt SV_3')
 ax.plot(T_FF_4,dT_FF_4,'o-',label='dT/dt FF_4')
 # ax.plot(T_SV_3,dT_interp_4_new,'o-',label='dT/dt FF_4')
 # ax.plot(xnew,ynew,'o-',label='dT/dt SV_3')
@@ -278,15 +279,215 @@ ax2.scatter(t_FF_4[indx_max_resta_4],T_4_rec[indx_max_resta_4],marker='D',color=
 
 
 ax2.set_xlim(0,160)
+ax.set_xlabel('T (°C)')
+ax2.set_xlabel('t (s)')
 for ai in [ax,ax2]:
-    ai.set_xlabel('t (s)')
     ai.set_ylabel('T (ºC)')
     ai.legend(ncol=2)
     ai.grid()
 ax.set_title('Derivadas temporales vs Temperatura',loc='left')
 ax2.set_title('Temperatura vs t',loc='left')
-
+plt.savefig('calentamiento_LN2_FF4_SV.png',dpi=300)
 plt.show()
 
-#%% 
+#%% FF3 - SV3 
 
+f2 = interp1d(T_SV_3,dT_SV_3, kind='cubic', fill_value='extrapolate')
+
+xnew=T_FF_3[:-45]
+ynew=f(xnew)
+xnew2=T_FF_3[:-45]
+ynew2=f2(xnew2)
+
+resta_3 = dT_FF_3[:-45]-ynew2
+T_FF_3_solido= T_FF_3[np.nonzero(T_FF_3<-5)]
+# Calculo de SAR 
+Concentracion = 14.92/1000 # m/m
+CFF= 2.07 # J/Kg para la C1
+CSV= 2.10 # J/Kg 
+
+SAR_3 = (dT_FF_3[np.nonzero(T_FF_3<-5)]*CFF - ynew2[np.nonzero(T_FF_3<-5)]*CSV)/Concentracion
+
+indx_max_resta_3= np.argwhere(resta_3==max(resta_3))[0][0]
+
+from scipy.integrate import cumulative_trapezoid
+
+# Recuperar T original
+T_FF3_rec = cumulative_trapezoid(y=resta_3,x=t_FF_3[:-45],initial=0) + T_FF_3[0] 
+T_FF3_rec_max = T_FF3_rec[indx_max_resta_3]
+T_FF_3_orig_max=T_FF_3[indx_max_resta_3]
+
+fig,(ax,ax2)=plt.subplots(nrows=2,figsize=(10,6),constrained_layout=True)
+ax.plot(T_SV_3,dT_SV_3,'.-',label='dT/dt SV_3')
+ax.plot(T_FF_3,dT_FF_3,'o-',label='dT/dt FF_3')
+
+# ax.plot(T_SV_3,dT_interp_3_new,'o-',label='dT/dt FF_3')
+# ax.plot(xnew,ynew,'o-',label='dT/dt SV_3')
+ax.plot(xnew2,ynew2,'o-',label='dT/dt FF_3 (interpolado)')
+ax.plot(xnew2,resta_3,'o-',label='dTFF3/dt - dTSV3/dt')
+ax.plot(xnew2[indx_max_resta_3],resta_3[indx_max_resta_3],'bD',label=f'Max WR {resta_3[indx_max_resta_3]:.2f} °C/s')
+
+
+ax2.plot(t_FF_3,T_FF_3,'.-',label='T FF3 ')
+
+ax2.plot(t_SV_3[indices_unicos_ordenados],T_SV_3,'.-',label='T SV3')
+ax2.plot(t_FF_3[:-45],T_FF3_rec,'.-',label='T FF3 s/atmosfera')
+ax2.scatter(t_FF_3[indx_max_resta_3],T_FF3_rec[indx_max_resta_3],marker='D',color='blue',zorder=5,label=f'Max WR {resta_3[indx_max_resta_3]:.2f} °C/s\n (at {T_FF3_rec[indx_max_resta_3]:.2f} °C)')
+
+
+ax2.set_xlim(0,160)
+ax.set_xlabel('T (°C)')
+ax2.set_xlabel('t (s)')
+for ai in [ax,ax2]:
+    ai.set_ylabel('T (ºC)')
+    ai.legend(ncol=2)
+    ai.grid()
+ax.set_title('Derivadas temporales vs Temperatura',loc='left')
+ax2.set_title('Temperatura vs t',loc='left')
+plt.savefig('calentamiento_LN2_FF3_SV.png',dpi=300)
+plt.show()
+#%% FF2 - SV3 
+
+f2 = interp1d(T_SV_3,dT_SV_3, kind='cubic', fill_value='extrapolate')
+xnew=T_FF_2[:-43]
+ynew=f(xnew)
+xnew2=T_FF_2[:-43]
+ynew2=f2(xnew2)
+
+resta_2 = dT_FF_2[:-43]-ynew2
+T_FF_2_solido= T_FF_2[np.nonzero(T_FF_2<-5)]
+# Calculo de SAR 
+Concentracion = 14.92/1000 # m/m
+CFF= 2.07 # J/Kg para la C1
+CSV= 2.10 # J/Kg 
+
+SAR_2 = (dT_FF_2[np.nonzero(T_FF_2<-5)]*CFF - ynew2[np.nonzero(T_FF_2<-5)]*CSV)/Concentracion
+indx_max_resta_2= np.argwhere(resta_2==max(resta_2))[0][0]
+
+from scipy.integrate import cumulative_trapezoid
+
+# Recuperar T original
+T_FF2_rec = cumulative_trapezoid(y=resta_2,x=t_FF_2[:-43],initial=0) + T_FF_2[0] 
+T_FF2_rec_max = T_FF2_rec[indx_max_resta_2]
+T_FF_2_orig_max=T_FF_2[indx_max_resta_2]
+
+fig,(ax,ax2)=plt.subplots(nrows=2,figsize=(10,6),constrained_layout=True)
+ax.plot(T_SV_3,dT_SV_3,'.-',label='dT/dt SV_3')
+ax.plot(T_FF_2,dT_FF_2,'o-',label='dT/dt FF_2')
+
+ax.plot(xnew2,ynew2,'o-',label='dT/dt FF_2 (interpolado)')
+ax.plot(xnew2,resta_2,'o-',label='dTFF2/dt - dTSV3/dt')
+ax.plot(xnew2[indx_max_resta_2],resta_2[indx_max_resta_2],'bD',label=f'Max WR {resta_2[indx_max_resta_2]:.2f} °C/s')
+
+
+ax2.plot(t_FF_2,T_FF_2,'.-',label='T FF2 ')
+
+ax2.plot(t_SV_3[indices_unicos_ordenados],T_SV_3,'.-',label='T SV3')
+ax2.plot(t_FF_2[:-43],T_FF2_rec,'.-',label='T FF2 s/atmosfera')
+ax2.scatter(t_FF_2[indx_max_resta_2],T_FF2_rec[indx_max_resta_2],marker='D',color='blue',zorder=5,label=f'Max WR {resta_2[indx_max_resta_2]:.2f} °C/s\n (at {T_FF2_rec[indx_max_resta_2]:.2f} °C)')
+
+
+ax2.set_xlim(0,160)
+ax.set_xlabel('T (°C)')
+ax2.set_xlabel('t (s)')
+for ai in [ax,ax2]:
+    ai.set_ylabel('T (ºC)')
+    ai.legend(ncol=2)
+    ai.grid()
+ax.set_title('Derivadas temporales vs Temperatura',loc='left')
+ax2.set_title('Temperatura vs t',loc='left')
+plt.savefig('calentamiento_LN2_FF2_SV.png',dpi=300)
+plt.show()
+#%% FF1 SV3
+f2 = interp1d(T_SV_3,dT_SV_3, kind='cubic', fill_value='extrapolate')
+xnew=T_FF_1[:-43]
+ynew=f(xnew)
+xnew2=T_FF_1[:-43]
+ynew2=f2(xnew2)
+
+resta_1 = dT_FF_1[:-43]-ynew2
+
+indx_max_resta_1= np.argwhere(resta_1==max(resta_1))[0][0]
+T_FF_1_solido= T_FF_1[np.nonzero(T_FF_1<-5)]
+# Calculo de SAR 
+Concentracion = 14.92/1000 # m/m
+CFF= 2.07 # J/Kg para la C1
+CSV= 2.10 # J/Kg 
+
+SAR_1 = (dT_FF_1[np.nonzero(T_FF_1<-5)]*CFF - ynew2[np.nonzero(T_FF_1<-5)]*CSV)/Concentracion
+
+from scipy.integrate import cumulative_trapezoid
+
+# Recuperar T original
+T_FF1_rec = cumulative_trapezoid(y=resta_1,x=t_FF_1[:-43],initial=0) + T_FF_1[0] 
+T_FF1_rec_max = T_FF1_rec[indx_max_resta_1]
+T_FF_1_orig_max=T_FF_1[indx_max_resta_1]
+
+fig,(ax,ax2)=plt.subplots(nrows=2,figsize=(10,6),constrained_layout=True)
+ax.plot(T_SV_3,dT_SV_3,'.-',label='dT/dt SV_3')
+ax.plot(T_FF_1,dT_FF_1,'o-',label='dT/dt FF_1')
+
+ax.plot(xnew2,ynew2,'o-',label='dT/dt FF_1 (interpolado)')
+ax.plot(xnew2,resta_1,'o-',label='dTFF2/dt - dTSV3/dt')
+ax.plot(xnew2[indx_max_resta_1],resta_1[indx_max_resta_1],'bD',label=f'Max WR {resta_1[indx_max_resta_1]:.2f} °C/s')
+
+
+ax2.plot(t_FF_1,T_FF_1,'.-',label='T FF2 ')
+
+ax2.plot(t_SV_3[indices_unicos_ordenados],T_SV_3,'.-',label='T SV3')
+ax2.plot(t_FF_1[:-43],T_FF1_rec,'.-',label='T FF1 s/atmosfera')
+ax2.scatter(t_FF_1[indx_max_resta_1],T_FF1_rec[indx_max_resta_1],marker='D',color='blue',zorder=5,label=f'Max WR {resta_1[indx_max_resta_1]:.2f} °C/s\n (at {T_FF2_rec[indx_max_resta_1]:.2f} °C)')
+
+ax2.set_xlim(0,160)
+ax.set_xlabel('T (°C)')
+ax2.set_xlabel('t (s)')
+for ai in [ax,ax2]:
+    ai.set_ylabel('T (ºC)')
+    ai.legend(ncol=2)
+    ai.grid()
+ax.set_title('Derivadas temporales vs Temperatura',loc='left')
+ax2.set_title('Temperatura vs t',loc='left')
+plt.savefig('calentamiento_LN2_FF1_SV.png',dpi=300)
+plt.show()
+
+#%% ahora todas las reconstrucciones
+
+fig,(ax)=plt.subplots(nrows=1,figsize=(10,4),constrained_layout=True,sharex=True)
+# ax.plot(t_SV_3,dT_SV_3,'o-',label='dT/dt SV_3')
+
+ax.plot(t_FF_1[:-43],T_FF1_rec,'.-',label='T FF1 s/atmosfera')
+ax.plot(t_FF_2[:-43],T_FF2_rec,'.-',label='T FF2 s/atmosfera')
+ax.plot(t_FF_3[:-45],T_FF3_rec,'.-',label='T FF3 s/atmosfera')
+ax.plot(t_FF_4[:-37],T_4_rec,'.-',label='T FF4 s/atmosfera')
+
+#ax.plot(T_FF_4,dT_FF_4,'o-',label='dT/dt FF_4')
+# ax2.plot(T_interp_FF_4,dT_interp_FF_4,'o-',label='dT/dt interp_FF_4',zorder=0)
+for ai in [ax]:
+    ai.set_ylabel('T (°C)')
+    ai.set_xlabel('t (s)')
+    ai.legend(ncol=2)
+    ai.grid()
+plt.suptitle('Cambio de Temperatura por NP - Enfriamiento poir LN2')
+plt.savefig('cambio_T_por_NP_LN2.png',dpi=300)
+plt.show()
+#%%
+
+fig,(ax)=plt.subplots(nrows=1,figsize=(10,4),constrained_layout=True,sharex=True)
+# ax.plot(t_SV_3,dT_SV_3,'o-',label='dT/dt SV_3')
+
+ax.plot(T_FF_1_solido,SAR_1,'.-',label='SAR FF1 (s/atmosfera)')
+ax.plot(T_FF_2_solido,SAR_2,'.-',label='SAR FF2 (s/atmosfera)')
+ax.plot(T_FF_3_solido,SAR_3,'.-',label='SAR FF3 (s/atmosfera)')
+ax.plot(T_FF_4_solido,SAR_4,'.-',label='SAR FF4 (s/atmosfera)')
+
+#ax.plot(T_FF_4,dT_FF_4,'o-',label='dT/dt FF_4')
+# ax2.plot(T_interp_FF_4,dT_interp_FF_4,'o-',label='dT/dt interp_FF_4',zorder=0)
+for ai in [ax]:
+    ai.set_ylabel('SAR (W/g)')
+    ai.set_xlabel('T (°C)')
+    ai.legend(ncol=2)
+    ai.grid()
+plt.suptitle('SAR en funcion de la temperatura')
+plt.savefig('SAR_vs_T.png',dpi=300)
+plt.show()
+# %%
